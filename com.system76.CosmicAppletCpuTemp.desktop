@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=CPU Temperature
+Name[en]=CPU Temperature
+Type=Application
+Exec=cosmic-applet-cpu-temp
+Terminal=false
+Categories=COSMIC;
+Keywords=COSMIC;Iced;Temperature;CPU;
+Icon=com.system76.CosmicAppletCpuTemp-symbolic
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicShrinkable=true
+X-HostWaylandDisplay=true
+X-CosmicHoverPopup=Auto
