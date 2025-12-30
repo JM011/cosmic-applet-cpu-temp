@@ -8,8 +8,11 @@ use std::time::Duration;
 const ID: &str = "com.system76.CosmicAppletCpuTemp";
 const UPDATE_INTERVAL_SECS: u64 = 2;
 
+use sysinfo::{Components, RefreshKind};
+
 pub struct Window {
     core: Core,
+    components: Components,
     temperature: f32,
 }
 
@@ -17,6 +20,7 @@ impl Default for Window {
     fn default() -> Self {
         Self {
             core: Core::default(),
+            components: Components::new_with_refreshed_list(),
             temperature: 0.0,
         }
     }
@@ -43,9 +47,13 @@ impl cosmic::Application for Window {
     }
 
     fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Message>) {
+        let mut components = Components::new_with_refreshed_list();
+        let temperature = get_cpu_temp(&components);
+        
         let window = Window {
             core,
-            temperature: read_cpu_temp().unwrap_or(0.0),
+            components,
+            temperature,
         };
         (window, Task::none())
     }
@@ -62,9 +70,8 @@ impl cosmic::Application for Window {
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Tick => {
-                if let Ok(temp) = read_cpu_temp() {
-                    self.temperature = temp;
-                }
+                self.components.refresh(true);
+                self.temperature = get_cpu_temp(&self.components);
                 Task::none()
             }
             Message::Surface(a) => {
@@ -107,47 +114,43 @@ impl cosmic::Application for Window {
     }
 }
 
-fn read_cpu_temp() -> Result<f32, Box<dyn std::error::Error>> {
-    if let Ok(output) = std::process::Command::new("sensors")
-        .arg("-j")
-        .output()
-    {
-        if let Ok(json_str) = String::from_utf8(output.stdout) {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                if let Some(k10temp) = json.get("k10temp-pci-00c3") {
-                    if let Some(tctl) = k10temp.get("Tctl") {
-                        if let Some(temp) = tctl.get("temp1_input").and_then(|v| v.as_f64()) {
-                            return Ok(temp as f32);
-                        }
-                    }
-                }
-                for key in json.as_object().unwrap().keys() {
-                    if key.contains("cpu") || key.contains("k10") || key.contains("coretemp") {
-                        if let Some(chip) = json.get(key) {
-                            if let Some(temp_obj) = chip.as_object() {
-                                for (_, value) in temp_obj {
-                                    if let Some(temp) = value.get("temp1_input")
-                                        .and_then(|v| v.as_f64())
-                                        .or_else(|| value.get("input").and_then(|v| v.as_f64()))
-                                    {
-                                        return Ok(temp as f32);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+fn get_cpu_temp(components: &Components) -> f32 {
+    // Try to find a component that looks like a CPU package first
+    let mut cpu_temp = 0.0;
+    let mut found_package = false;
+
+    for component in components {
+        let label = component.label().to_lowercase();
+        
+        // Priority to Package id 0 or generic k10temp (AMD) / coretemp (Intel) package
+        if label.contains("package id 0") || label == "tctl" {
+            cpu_temp = component.temperature();
+            found_package = true;
+            break;
+        }
+
+        // Fallback or accumulate if we want average (here keeping simple: max or first found cpu-ish thing)
+        if !found_package && (label.contains("cpu") || label.contains("core")) {
+             // If we haven't found a package temp yet, take the highest core temp seen so far
+             let t = component.temperature();
+             if t > cpu_temp {
+                 cpu_temp = t;
+             }
+        }
+    }
+    
+    // If still 0, just take the first thing that has a temp > 0 as a hail mary
+    if cpu_temp == 0.0 && !components.is_empty() {
+        for component in components {
+            let t = component.temperature();
+            if t > 0.0 {
+                cpu_temp = t;
+                break;
             }
         }
     }
 
-    if let Ok(content) = std::fs::read_to_string("/sys/class/thermal/thermal_zone0/temp") {
-        if let Ok(millidegrees) = content.trim().parse::<f32>() {
-            return Ok(millidegrees / 1000.0);
-        }
-    }
-
-    Err("Could not read CPU temperature".into())
+    cpu_temp
 }
 
 fn main() -> cosmic::iced::Result {

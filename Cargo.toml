@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 env_logger = "0.10"
 tracing = "0.1"
-serde_json = "1.0"
+sysinfo = "0.30"
 
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic"
