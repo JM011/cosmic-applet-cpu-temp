@@ -6,7 +6,7 @@ A simple applet for the COSMIC desktop environment that displays CPU temperature
 
 - Displays CPU temperature in degrees Celsius
 - Updates every 2 seconds
-- Automatically detects CPU temperature via `sensors` or thermal zone
+- Uses native Rust `sysinfo` crate for efficient temperature reading (no external dependencies)
 
 ## Requirements
 
