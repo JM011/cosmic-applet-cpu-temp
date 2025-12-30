@@ -115,23 +115,19 @@ impl cosmic::Application for Window {
 }
 
 fn get_cpu_temp(components: &Components) -> f32 {
-    // Try to find a component that looks like a CPU package first
     let mut cpu_temp = 0.0;
     let mut found_package = false;
 
     for component in components {
         let label = component.label().to_lowercase();
         
-        // Priority to Package id 0 or generic k10temp (AMD) / coretemp (Intel) package
         if label.contains("package id 0") || label == "tctl" {
             cpu_temp = component.temperature();
             found_package = true;
             break;
         }
 
-        // Fallback or accumulate if we want average (here keeping simple: max or first found cpu-ish thing)
         if !found_package && (label.contains("cpu") || label.contains("core")) {
-             // If we haven't found a package temp yet, take the highest core temp seen so far
              let t = component.temperature();
              if t > cpu_temp {
                  cpu_temp = t;
@@ -139,7 +135,6 @@ fn get_cpu_temp(components: &Components) -> f32 {
         }
     }
     
-    // If still 0, just take the first thing that has a temp > 0 as a hail mary
     if cpu_temp == 0.0 && !components.is_empty() {
         for component in components {
             let t = component.temperature();
